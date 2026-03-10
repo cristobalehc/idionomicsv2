@@ -7,23 +7,37 @@
 #' @param min_n_subject The minimum number of non NA cases to run the analyses. It will filter cases with more NA's than the threshold. Defaults to 20.
 #' @param minvar The minimum variance for both series (&) to include a case. Defaults to 0.01.
 #' @param y_series A string containing the name of your dependent variable y.
-#' @param x_series A string containing the name of your independent variable x.
+#' @param x_series A character vector containing the name(s) of your predictor variable(s).
+#' @param focal_predictor A string with the name of the predictor to use in the meta-analysis. Required when x_series has more than one variable. When x_series is a single variable, defaults to that variable.
 #' @param id_var A string containing your id variable.
-#' @param timevar Requiered to arrange timeseries.
-#' @param correlation_method Select method fr raw correlations. Options are: 'spearman', 'pearson' or 'kendall'. Defaults to 'pearson'.
+#' @param timevar Required to arrange timeseries.
+#' @param correlation_method Select method for raw correlations. Options are: 'spearman', 'pearson' or 'kendall'. Defaults to 'pearson'.
 #' @param keep_models If TRUE, will keep original arimax models in a list.
+#' @param verbose If TRUE, prints progress messages during filtering and model fitting. Defaults to FALSE.
 #'
-#' @returns A list containing a dataframe with the ARIMA parameters, plus the xreg parameter (the beta value for your x_series) together with their std.errors. If metaanalysis = TRUE, will also output a random effects meta analysis. If hlm_compare = TRUE, will also output a model comparison with HLM.
+#' @returns A list containing a dataframe with the ARIMA parameters, plus the xreg parameters (the beta values for your x_series) together with their std.errors, and a random effects meta analysis on the focal predictor.
 
 
 #######################################
 ############ I ARIMAX FUNCTION #######
 #####################################
 
-iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_series, id_var,
-                    timevar, correlation_method = 'pearson', keep_models = FALSE) {
+iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_series,
+                    focal_predictor = NULL, id_var, timevar,
+                    correlation_method = 'pearson', keep_models = FALSE, verbose = FALSE) {
 
+  # Resolve focal_predictor: default to x_series when only one predictor is given.
+  if (is.null(focal_predictor)) {
+    if (length(x_series) == 1) {
+      focal_predictor <- x_series
+    } else {
+      stop("focal_predictor is required when x_series contains more than one variable.")
+    }
+  }
 
+  if (!focal_predictor %in% x_series) {
+    stop(paste("focal_predictor must be one of the x_series variables. Got:", focal_predictor))
+  }
 
   # CHeck wether variables are in the in the dataset.
   required_vars <- c(y_series, x_series, id_var, timevar)
@@ -35,7 +49,6 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
 
   # Convert strings to rlang::symbols
   y_series_sym <- rlang::sym(y_series)
-  x_series_sym <- rlang::sym(x_series)
   id_var_sym <- rlang::sym(id_var)
   timevar_sym <- rlang::sym(timevar)
 
@@ -46,33 +59,30 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
   #Subset only relevant features.
   dataframe <- dataframe[, required_vars, drop = FALSE]
 
-  ##                       ##
-  #Add a filtering message ##
-  ##                       ##
+  if (verbose) message('Filtering data based on minimum non-NA observations and variance...')
 
   # Filter N pairwise complete observations with variance conditions
-  subjects <- dataframe %>%
-    dplyr::group_by(!!id_var_sym) %>% #Group by id variable.
-    dplyr::filter(!is.na(!!y_series_sym) & !is.na(!!x_series_sym) & !is.na(!!timevar_sym)) %>% #Filter all that are complete in all variables.
+  subjects <- dataframe |>
+    dplyr::group_by(!!id_var_sym) |> #Group by id variable.
+    dplyr::filter(!is.na(!!y_series_sym) & !is.na(!!timevar_sym) &
+                    dplyr::if_all(dplyr::all_of(x_series), ~ !is.na(.x))) |> #Filter all that are complete in all variables.
     dplyr::summarise(
       count = dplyr::n(), #Use counts to filter.
       var_y = stats::var(!!y_series_sym, na.rm = TRUE), #use variance to filter.
-      var_x = stats::var(!!x_series_sym, na.rm = TRUE), #Use variance to filter.
+      dplyr::across(dplyr::all_of(x_series), ~ stats::var(.x, na.rm = TRUE), .names = "var_{.col}"), #Variance for each predictor.
       .groups = 'drop'
-    ) %>%
-    dplyr::filter(count >= min_n_subject, var_y >= minvar, var_x >= minvar)  %>%
+    ) |>
+    dplyr::filter(count >= min_n_subject,
+                  dplyr::if_all(dplyr::starts_with("var_"), ~ .x >= minvar)) |> #y and all predictors must meet minvar.
     dplyr::pull(!!id_var_sym) #Filter data.
 
   #ID as character, to avoid giant lists.
   subjects <- as.character(subjects)
 
-  #
-  # End of filtering message.
-  #
-
-  #
-  # Running auto-arima algorithm message.
-  #
+  if (verbose) {
+    message('Filtering done: ', length(subjects), ' subjects will be used for the analyses.')
+    message('Running I-ARIMAX algorithm...')
+  }
 
   #Storage lists.
 
@@ -99,15 +109,11 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
     #Update case number.
     casen <- casen + 1
 
-    #Start text.
-
-    # IARIMAX MESSAGE EACH CASE.
-    #cat(paste('  Applying auto ARIMAX to case: ', as.character(i), ' ... '))
-    #
+    if (verbose) message('  Applying auto ARIMAX to case: ', i, ' ... ', appendLF = FALSE) # appendLF = FALSE keeps cursor on same line so the completion percentage prints right after.
 
     #Extract the current subject & arrange timeseries by timevar.
-    subject_n <- dataframe %>%
-      dplyr::filter(!!id_var_sym == i, !is.na(!!timevar_sym)) %>% #also filter out missing timevars, to avoid sending them to the bottom.
+    subject_n <- dataframe |>
+      dplyr::filter(!!id_var_sym == i, !is.na(!!timevar_sym)) |> #also filter out missing timevars, to avoid sending them to the bottom.
       dplyr::arrange(!!timevar_sym) #Ensure time-series order.
 
     ##########################################
@@ -120,27 +126,26 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
     # in the state-space update, preserving temporal structure.
 
     #Extract y vector.
-    y_vector <- subject_n %>%
+    y_vector <- subject_n |>
       dplyr::pull(!!y_series_sym)
 
-    #Extract x vector.
-    x_vector <- subject_n %>%
-      dplyr::pull(!!x_series_sym)
-
-    #Count number of valid observations.
-    n_valid_val <- sum(!is.na(y_vector) & !is.na(x_vector))
+    #Extract x matrix (one column per predictor, named).
+    x_matrix <- as.matrix(subject_n[, x_series, drop = FALSE])
 
 
     ########################
     #### Calculate cor #####
     ########################
 
+    # Correlation is computed for the focal predictor only.
+    focal_vector <- subject_n |> dplyr::pull(focal_predictor)
+
     correlation <- tryCatch(
       {#Supress spearman's warning about p-values with ties.
-        suppressWarnings(stats::cor.test(x = x_vector, y = y_vector, method = correlation_method))
+        suppressWarnings(stats::cor.test(x = focal_vector, y = y_vector, method = correlation_method))
       },
       error = function(e) {
-        cat("\n","\n",' Error computing correlation for case: ',as.character(i), "\n","  ",e$message,"\n")
+        message('\nError computing correlation for case: ', i, '\n  ', e$message)
         NULL #Set model as NULL
       }
     )
@@ -158,10 +163,10 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
 
     model <- tryCatch(
       {
-        forecast::auto.arima(y = y_vector, xreg = x_vector, approximation = FALSE, stepwise = FALSE)
+        forecast::auto.arima(y = y_vector, xreg = x_matrix, approximation = FALSE, stepwise = FALSE)
       },
       error = function(e) {
-        cat("\n","\n",'  Error running ARIMAX model for case: ',as.character(i), "\n","  ",e$message,"\n")
+        message('\nError running ARIMAX model for case: ', i, '\n  ', e$message)
         NULL #Set model as NULL
       }
     )
@@ -179,40 +184,16 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
 
       exclude <- c(exclude,i)
 
-      ##### MESSAGE ABOUT SKIPPING CASE OR PROGRESS.
-
-      #cat("\n","   Skipping case due to error: ")
-      #cat("        ... ",round((casen/(length(subjects))*100),digits = 1),'% completed',"\n","\n") #Keep printing advance percentage.
+      if (verbose) message('skipped. (', round(casen / length(subjects) * 100, 1), '% done)')
       next #Skip the next part of this iteration of the loop, so it doesn't get overriden and throws an error.
     }
 
-    # Tidy the model (may be hijacked by fable::tidy.ARIMA)
+    # Remove fable's "ARIMA" class to prevent it from hijacking broom::tidy.
+    class(model) <- setdiff(class(model), "ARIMA")
     tidymodel <- broom::tidy(model)
 
-    # If we didn't get a tibble/data.frame (e.g., fable's tidy.ARIMA returned NULL),
-    # fall back by stripping the "ARIMA" class so broom's tidy.Arima is used.
-    if (is.null(tidymodel) || !is.data.frame(tidymodel)) {
-
-      if (inherits(model, "Arima")) {
-
-        # Work on a copy so we don't touch `model` used later
-        model2 <- model
-        class(model2) <- setdiff(class(model2), "ARIMA")
-
-        # Now S3 dispatch sees classes c("forecast_ARIMA", "Arima"),
-        # so it will choose broom's tidy.Arima method instead of fable's tidy.ARIMA
-        tidymodel <- broom::tidy(model2)
-
-      } else {
-        stop(
-          "IARIMAXoid_Pro: could not tidy model of class ",
-          paste(class(model), collapse = ", ")
-        )
-      }
-    }
-
     #Add id to tidy model.
-    tidymodel <- tidymodel %>%
+    tidymodel <- tidymodel |>
       dplyr::mutate(!!id_var_sym := i)
 
     #Fill the tidy model list.
@@ -230,16 +211,12 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
     I_N[[i]] <- model$arma[6] #Fill I list.
     MA_N[[i]] <- model$arma[2] #Fill MA List.
 
-    #Fill n valid and n params.
-    n_valid[[i]] <- n_valid_val
-    if (!is.null(model)){
-      n_params[[i]] <- length(model$coef)}
+    #Fill n valid and n params. nobs() returns the n used in the model likelihood.
+    n_valid[[i]] <- stats::nobs(model)
+    n_params[[i]] <- length(model$coef)
 
 
-    ### FINISH PROGRESS TEXT:
-
-    #Finish the text.
-    #cat(round((casen/(length(subjects))*100),digits = 1),'% completed',"\n")
+    if (verbose) message(round(casen / length(subjects) * 100, 1), '% done')
   }
 
   ###############################################
@@ -262,9 +239,9 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
   tidy_long <- dplyr::bind_rows(tidy_list)
 
 
-  # Pivot the coefficients to wide format
-  # This creates: estimate_xreg, std.error_xreg, estimate_ar1, etc.
-  tidy_wide <- tidy_long %>%
+  # Pivot the coefficients to wide format.
+  # Term names come from the xreg column names, e.g. estimate_stress, std.error_stress, estimate_ar1, etc.
+  tidy_wide <- tidy_long |>
     tidyr::pivot_wider(
       id_cols     = !!id_var_sym,
       names_from  = "term",
@@ -294,7 +271,7 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
 
   #Create dataframe to return.
 
-  results_df <- summary_df %>%
+  results_df <- summary_df |>
     dplyr::left_join(tidy_wide, by = id_var)
 
 
@@ -310,13 +287,16 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
 
   #Try running the random effects meta analysis.
 
+  focal_est_col <- paste0("estimate_",  focal_predictor)
+  focal_se_col  <- paste0("std.error_", focal_predictor)
+
   meta_analysis <-
     tryCatch(
       {
-        metafor::rma(yi = results_df$estimate_xreg, sei = results_df$std.error_xreg, method = "REML")
+        metafor::rma(yi = results_df[[focal_est_col]], sei = results_df[[focal_se_col]], method = "REML")
       },
       error = function(e) {
-        cat('Error running RME:', e$message, '\n')
+        message('Error running meta-analysis: ', e$message, '. meta_analysis will be NULL in the output.')
         NULL
       }
     )
@@ -327,11 +307,13 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
                     models = if (keep_models) arimax_models else NULL)
 
   class(final_obj) <- c("iarimax_results", "list")
-  return(final_obj)
+  attr(final_obj, "focal_predictor") <- focal_predictor
 
-  return()
+  if (verbose) message('I-ARIMAX algorithm finished.')
+
+  return(final_obj)
 
 }
 
 
-utils::globalVariables(c("count", "var_y", "var_x")) #Declare symbolic global variables.
+utils::globalVariables(c("count", "var_y")) #Declare symbolic global variables.
