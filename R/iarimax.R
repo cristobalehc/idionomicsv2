@@ -26,19 +26,6 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
                     focal_predictor = NULL, id_var, timevar,
                     correlation_method = 'pearson', keep_models = FALSE, verbose = FALSE) {
 
-  # Resolve focal_predictor: default to x_series when only one predictor is given.
-  if (is.null(focal_predictor)) {
-    if (length(x_series) == 1) {
-      focal_predictor <- x_series
-    } else {
-      stop("focal_predictor is required when x_series contains more than one variable.")
-    }
-  }
-
-  if (!focal_predictor %in% x_series) {
-    stop(paste("focal_predictor must be one of the x_series variables. Got:", focal_predictor))
-  }
-
   # Check wether variables are in the in the dataset.
   required_vars <- c(y_series, x_series, id_var, timevar)
 
@@ -57,12 +44,25 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
     )
   }
 
+  # Resolve focal_predictor: default to x_series when only one predictor is given.
+  if (is.null(focal_predictor)) {
+    if (length(x_series) == 1) {
+      focal_predictor <- x_series
+    } else {
+      stop("focal_predictor is required when x_series contains more than one variable.")
+    }
+  }
+
+  if (!focal_predictor %in% x_series) {
+    stop(paste("focal_predictor must be one of the x_series variables. Got:", focal_predictor))
+  }
+
   # Convert strings to rlang::symbols
   y_series_sym <- rlang::sym(y_series)
   id_var_sym <- rlang::sym(id_var)
   timevar_sym <- rlang::sym(timevar)
 
-  #Id var as character, to avoid numerics.
+  #Id var as character, to avoid numerics and giant lists.
   dataframe[[id_var]] <- as.character(dataframe[[id_var]])
 
 
@@ -271,9 +271,9 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
   #Create individual level summaries.
   summary_df <- tibble::tibble(
     !!id_var_sym := subjects,
-    p = AR_vector,
-    d = I_vector,
-    q = MA_vector,
+    nAR = AR_vector,
+    nI = I_vector,
+    nMA = MA_vector,
     raw_cor = raw_correlation_vector,
     n_valid = n_valid_vector,
     n_params = n_params_vector
@@ -283,12 +283,6 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
 
   results_df <- summary_df |>
     dplyr::left_join(tidy_wide, by = id_var)
-
-
-  #Add fixed attribute to id column, to be used in other functions.
-  attr(results_df[[id_var]], "is_id_column") <- TRUE
-
-
 
 
   ##############################################
@@ -316,8 +310,14 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
                     error_arimax_skipped = exclude,
                     models = if (keep_models) arimax_models else NULL)
 
+  #Add class to identify the object.
   class(final_obj) <- c("iarimax_results", "list")
+
+  #Add attribute to identify focal predictor, and id_var.
   attr(final_obj, "focal_predictor") <- focal_predictor
+  attr(final_obj, "id_var") <- id_var
+  attr(final_obj, "timevar") <- timevar
+
 
   if (verbose) message('I-ARIMAX algorithm finished.')
 
