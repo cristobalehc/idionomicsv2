@@ -39,12 +39,22 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
     stop(paste("focal_predictor must be one of the x_series variables. Got:", focal_predictor))
   }
 
-  # CHeck wether variables are in the in the dataset.
+  # Check wether variables are in the in the dataset.
   required_vars <- c(y_series, x_series, id_var, timevar)
 
   if (!all(required_vars %in% colnames(dataframe))) {
     missing_vars <- required_vars[!required_vars %in% colnames(dataframe)]
     stop(paste("Cannot find required variables. Check if you spelled the following variables correctly:", paste(missing_vars, collapse = ", ")))
+  }
+
+  #Check for timevar missing data: With missings, the data cannot be arranged, so this is a really important guardrail.
+  n_missing_timevar <- sum(is.na(dataframe[[timevar]]))
+  if (n_missing_timevar > 0) {
+    stop(
+      n_missing_timevar, " row(s) have missing values in the time variable '", timevar, "'. ",
+      "iarimax requires a non-missing timevar for every observation to ensure correct temporal ordering. ",
+      "Please review, remove or impute these rows before running iarimax."
+    )
   }
 
   # Convert strings to rlang::symbols
@@ -64,7 +74,7 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
   # Filter N pairwise complete observations with variance conditions
   subjects <- dataframe |>
     dplyr::group_by(!!id_var_sym) |> #Group by id variable.
-    dplyr::filter(!is.na(!!y_series_sym) & !is.na(!!timevar_sym) &
+    dplyr::filter(!is.na(!!y_series_sym) &
                     dplyr::if_all(dplyr::all_of(x_series), ~ !is.na(.x))) |> #Filter all that are complete in all variables.
     dplyr::summarise(
       count = dplyr::n(), #Use counts to filter.
@@ -113,7 +123,7 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
 
     #Extract the current subject & arrange timeseries by timevar.
     subject_n <- dataframe |>
-      dplyr::filter(!!id_var_sym == i, !is.na(!!timevar_sym)) |> #also filter out missing timevars, to avoid sending them to the bottom.
+      dplyr::filter(!!id_var_sym == i) |>
       dplyr::arrange(!!timevar_sym) #Ensure time-series order.
 
     ##########################################
