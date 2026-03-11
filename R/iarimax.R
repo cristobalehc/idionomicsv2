@@ -2,6 +2,7 @@
 #'
 #' @export
 #' @importFrom utils globalVariables
+#' @importFrom rlang :=
 #'
 #' @param dataframe Your dataframe.
 #' @param min_n_subject The minimum number of non NA cases to run the analyses. It will filter cases with more NA's than the threshold. Defaults to 20.
@@ -88,6 +89,11 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
 
   #ID as character, to avoid giant lists.
   subjects <- as.character(subjects)
+
+  #Stop if not enough subjects.
+  if (length(subjects) <= 1){
+    stop(paste("There are not enough cases to run the iarimax algorithm. You have", length(subjects),"valid cases."))
+  }
 
   if (verbose) {
     message('Filtering done: ', length(subjects), ' subjects will be used for the analyses.')
