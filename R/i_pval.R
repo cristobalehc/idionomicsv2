@@ -25,10 +25,10 @@ i_pval <- function(iarimax_object, feature = NULL) {
 
   #Check if the necessary columns exist
   if (!feature_name %in% names(iarimax_object$results_df)) {
-    stop(paste0("Error: Coefficient column '", feature, "' not found in the results data frame."))
+    stop(paste0("Coefficient column '", feature, "' not found in the results data frame."))
   }
   if (!std_feature_name %in% names(iarimax_object$results_df)) {
-    stop(paste0("Error: Standard error column '", std_feature_name, "' not found."))
+    stop(paste0("Standard error column '", std_feature_name, "' not found."))
   }
 
   #Calculate p_value
