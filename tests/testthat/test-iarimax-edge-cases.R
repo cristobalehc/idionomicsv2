@@ -148,3 +148,50 @@ test_that("non-sequential timevar (gaps) does not change results vs sequential",
   expect_equal(res_seq$results_df$estimate_x,
                res_gap$results_df$estimate_x, tolerance = 1e-8)
 })
+
+# ── Multi-predictor: REMA uses the correct focal predictor column ──────────────
+
+test_that("REMA uses estimate_x2 when focal_predictor is x2", {
+  set.seed(7)
+  panel2     <- make_panel(n_subjects = 3, n_obs = 25)
+  panel2$x2  <- rnorm(nrow(panel2))
+
+  res <- iarimax(dataframe = panel2, y_series = "y",
+                 x_series = c("x", "x2"), focal_predictor = "x2",
+                 id_var = "id", timevar = "time")
+
+  valid <- !is.na(res$results_df$estimate_x2)
+
+  # REMA yi should match estimate_x2
+  expect_equal(
+    as.numeric(res$meta_analysis$yi),
+    res$results_df$estimate_x2[valid],
+    tolerance = 1e-8
+  )
+
+  # And should NOT match estimate_x (x and x2 are independent, so estimates differ)
+  expect_false(isTRUE(all.equal(
+    as.numeric(res$meta_analysis$yi),
+    res$results_df$estimate_x[valid],
+    tolerance = 1e-4
+  )))
+})
+
+# ── NA in y: Kalman filter produces a valid estimate ─────────────────────────
+
+test_that("subject with some NA in y is still estimated via Kalman filter", {
+  panel_na       <- make_panel(n_subjects = 3, n_obs = 40, seed = 42)
+  rows_subj1     <- which(panel_na$id == "1")
+  panel_na$y[rows_subj1[1:5]] <- NA  # 35 complete cases remain, above min_n_subject
+
+  res  <- iarimax(dataframe = panel_na, y_series = "y", x_series = "x",
+                  id_var = "id", timevar = "time")
+  row1 <- res$results_df[res$results_df$id == "1", ]
+
+  # Subject still present and has a valid estimate
+  expect_true("1" %in% res$results_df$id)
+  expect_false(is.na(row1$estimate_x))
+
+  # nobs reflects the effective observations used (less than 40)
+  expect_true(row1$n_valid < 40)
+})

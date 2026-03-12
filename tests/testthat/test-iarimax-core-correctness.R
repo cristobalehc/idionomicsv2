@@ -126,3 +126,47 @@ test_that("shuffled input gives identical results to sorted input", {
   expect_equal(r1$nI,          r2$nI)
   expect_equal(r1$nMA,         r2$nMA)
 })
+
+# ── n_params ──────────────────────────────────────────────────────────────────
+
+test_that("n_params matches length(model$coef) for each subject", {
+  for (subj in subjects) {
+    m       <- manual_fit(panel, subj)
+    pkg_row <- result$results_df[result$results_df$id == subj, ]
+    expect_equal(
+      unname(pkg_row$n_params),
+      length(m$model$coef),
+      label = paste("n_params for subject", subj)
+    )
+  }
+})
+
+# ── REMA standard errors ──────────────────────────────────────────────────────
+
+test_that("REMA sampling variances equal std.error_x squared", {
+  df <- result$results_df
+  expect_equal(
+    as.numeric(result$meta_analysis$vi),
+    df[["std.error_x"]]^2,
+    tolerance = 1e-8
+  )
+})
+
+# ── Signal recovery ───────────────────────────────────────────────────────────
+# The true xreg coefficient in make_panel is 0.5. With enough subjects and
+# observations the REMA pooled estimate should recover it.
+
+test_that("REMA pooled estimate recovers the true effect (0.5) in a larger panel", {
+  big_panel  <- make_panel(n_subjects = 10, n_obs = 35, seed = 42)
+  result_big <- iarimax(dataframe = big_panel, y_series = "y", x_series = "x",
+                        id_var = "id", timevar = "time")
+  rema_est <- as.numeric(result_big$meta_analysis$beta)
+
+  # Correct sign
+  expect_true(rema_est > 0,
+              label = paste("REMA estimate", round(rema_est, 3), "should be positive"))
+  # Within reasonable range of true value 0.5
+  expect_true(abs(rema_est - 0.5) < 0.35,
+              label = paste("REMA estimate", round(rema_est, 3),
+                            "should be within 0.35 of true value 0.5"))
+})

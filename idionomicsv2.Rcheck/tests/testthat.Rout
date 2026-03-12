@@ -19,14 +19,15 @@ Type 'q()' to quit R.
 > library(idionomicsv2)
 > 
 > test_check("idionomicsv2")
-[ FAIL 0 | WARN 0 | SKIP 3 | PASS 12 ]
+[ FAIL 0 | WARN 0 | SKIP 5 | PASS 57 ]
 
-══ Skipped tests (3) ═══════════════════════════════════════════════════════════
-• On CRAN (3): 'test-core-correctness.R:6:1', 'test-edge-cases.R:4:1',
-  'test-output-structure.R:4:1'
+══ Skipped tests (5) ═══════════════════════════════════════════════════════════
+• On CRAN (5): 'test-i-pval.R:150:1', 'test-iarimax-core-correctness.R:6:1',
+  'test-iarimax-edge-cases.R:4:1', 'test-iarimax-output-structure.R:4:1',
+  'test-sden-test.R:251:1'
 
-[ FAIL 0 | WARN 0 | SKIP 3 | PASS 12 ]
+[ FAIL 0 | WARN 0 | SKIP 5 | PASS 57 ]
 > 
 > proc.time()
    user  system elapsed 
-  1.287   0.074   1.363 
+  1.388   0.098   1.489 

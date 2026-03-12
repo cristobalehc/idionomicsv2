@@ -1,1 +1,6 @@
+i_pval                  Case by case p-value calculation based on
+                        t-distribution.
 iarimax                 Run I-ARIMAX algorithm.
+sden_test               Run Sign Divergence or Equisyncratic Null
+                        tests.
+summary.sden_results    Summary method for sden_results objects.
