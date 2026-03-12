@@ -12,16 +12,14 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
-Imports:
-    broom,
-    dplyr,
-    forecast,
-    metafor,
-    rlang,
-    stats,
-    tibble,
-    tidyr,
-    utils
-Suggests:
-    testthat (>= 3.0.0)
+Imports: broom, dplyr, forecast, metafor, rlang, stats, tibble, tidyr,
+        utils
+Suggests: testthat (>= 3.0.0)
 Config/testthat/edition: 3
+NeedsCompilation: no
+Packaged: 2026-03-11 20:05:52 UTC; cristobalhernandez
+Author: Cristóbal Hernández [cre, aut],
+  Joseph Ciarrochi [aut],
+  Steven Hayes [aut],
+  Baljinder Sahdra [aut]
+Maintainer: Cristóbal Hernández <cristobal.ehc@gmail.com>
