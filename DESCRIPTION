@@ -15,7 +15,9 @@ RoxygenNote: 7.3.2
 Imports:
     broom,
     dplyr,
+    forcats,
     forecast,
+    ggplot2,
     metafor,
     rlang,
     stats,

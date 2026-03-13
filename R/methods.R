@@ -5,6 +5,7 @@
 #'   significant counts. Defaults to 0.05.
 #' @param ... Additional arguments (ignored).
 #' @returns Invisibly returns \code{object}, called for its side effect of printing.
+#' @importFrom stats predict
 #' @export
 #' @method summary iarimax_results
 summary.iarimax_results <- function(object, alpha = 0.05, ...) {
@@ -83,6 +84,104 @@ summary.iarimax_results <- function(object, alpha = 0.05, ...) {
 
   cat("\n")
   invisible(object)
+}
+
+
+#' Caterpillar plot method for iarimax_results objects.
+#'
+#' @param x An object of class \code{iarimax_results}.
+#' @param feature Feature to plot. Defaults to the focal predictor attribute. Use your
+#'   original variable name — the function appends \code{estimate_} and \code{std.error_}
+#'   internally.
+#' @param y_series_name Optional: substantive name for the outcome variable, used in the plot title.
+#' @param x_series_name Optional: substantive name for the predictor variable, used in the plot title.
+#' @param alpha_crit_t Critical value for per-subject significance colouring. Defaults to 0.05.
+#' @param lims Numeric vector of length 2 setting the effect size axis limits. Defaults to \code{c(-1, 1)}.
+#' @param ... Additional arguments (ignored).
+#' @returns A ggplot2 object.
+#' @export
+#' @method plot iarimax_results
+plot.iarimax_results <- function(x, feature = NULL, y_series_name = NULL,
+                                 x_series_name = NULL, alpha_crit_t = 0.05,
+                                 lims = c(-1, 1), ...) {
+
+  # Resolve feature: default to focal predictor attribute.
+  if (is.null(feature)) {
+    feature <- attr(x, "focal_predictor")
+  }
+
+  # Guard: check feature exists in results_df.
+  est_col <- paste0("estimate_",  feature)
+  se_col  <- paste0("std.error_", feature)
+
+  if (!est_col %in% colnames(x$results_df)) {
+    stop("Feature '", feature, "' not found in results_df. ",
+         "Check that you spelled the variable name correctly.")
+  }
+
+  id_var     <- attr(x, "id_var")
+  id_var_sym <- rlang::sym(id_var)
+  est_sym    <- rlang::sym(est_col)
+  se_sym     <- rlang::sym(se_col)
+
+  df_plt <- x$results_df |>
+    dplyr::mutate(
+      df_mod   = n_valid - n_params,
+      crit_val = stats::qt(1 - (alpha_crit_t / 2), df_mod),
+      !!id_var_sym := forcats::fct_reorder(as.factor(!!id_var_sym), !!est_sym),
+      line_color = dplyr::case_when(
+        !!est_sym - crit_val * !!se_sym > 0 ~ "green",
+        !!est_sym + crit_val * !!se_sym < 0 ~ "red",
+        TRUE ~ "black"
+      )
+    )
+
+  plot_title <- if (is.null(y_series_name) || is.null(x_series_name)) {
+    paste0(feature, " linked to ", attr(x, "outcome"))
+  } else {
+    paste0(x_series_name, " linked to \n", y_series_name)
+  }
+
+  p <- ggplot2::ggplot(df_plt, ggplot2::aes(x = !!id_var_sym, y = !!est_sym)) +
+    ggplot2::geom_point() +
+    ggplot2::geom_linerange(
+      ggplot2::aes(
+        ymin  = !!est_sym - crit_val * !!se_sym,
+        ymax  = !!est_sym + crit_val * !!se_sym,
+        color = line_color
+      )
+    ) +
+    ggplot2::scale_color_identity() +
+    ggplot2::geom_hline(yintercept = 0, linetype = "dashed") +
+    ggplot2::coord_flip(ylim = lims) +
+    ggplot2::labs(
+      x       = "Participant ID",
+      y       = "i-ARIMAX Effect Sizes and 95% Confidence Intervals",
+      title   = plot_title,
+      caption = "Note: Blue band = 95% CI of the RE-MA pooled effect.\nGreen = positive, Red = negative, Black = crosses zero."
+    ) +
+    ggplot2::theme(
+      plot.title   = ggplot2::element_text(hjust = 0.5),
+      plot.caption = ggplot2::element_text(hjust = 0),
+      axis.text.y  = ggplot2::element_blank()
+    )
+
+  # Overlay RE-MA pooled effect and CI band if meta-analysis is available.
+  if (!is.null(x$meta_analysis)) {
+    p <- p +
+      ggplot2::geom_hline(
+        yintercept = as.numeric(x$meta_analysis$beta),
+        color = "blue", linewidth = 1
+      ) +
+      ggplot2::annotate(
+        "rect",
+        xmin = -Inf, xmax = Inf,
+        ymin = x$meta_analysis$ci.lb, ymax = x$meta_analysis$ci.ub,
+        alpha = 0.2, fill = "blue"
+      )
+  }
+
+  p
 }
 
 
@@ -169,3 +268,5 @@ summary.sden_results <- function(object, ...) {
 
   invisible(object)
 }
+
+utils::globalVariables(c("n_valid", "n_params", "df_mod", "crit_val", "line_color"))
