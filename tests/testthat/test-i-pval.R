@@ -142,6 +142,37 @@ test_that("i_pval errors when feature column is missing", {
                "not found")
 })
 
+test_that("i_pval returns NA (not NaN) and warns when df <= 0", {
+  # n_valid == n_params => df = 0 for subject 1
+  fake <- make_fake_iarimax()
+  fake$results_df$n_valid  <- c(2L, 25L, 25L)
+  fake$results_df$n_params <- c(2L,  2L,  2L)
+
+  expect_warning(result <- i_pval(fake), regexp = "degrees of freedom")
+
+  pvals <- result$results_df$pval_x
+  expect_true(is.na(pvals[1]))    # df = 0  -> NA, not NaN
+  expect_false(is.na(pvals[2]))   # df = 23 -> valid p-value
+  expect_false(is.na(pvals[3]))
+})
+
+test_that("each subject's p-value corresponds to its own estimate and SE, not a neighbour's", {
+  # Three subjects with deliberately distinct |t| = 20, 3, 0.5 so p-values are
+  # well-separated. We verify each position against its own formula individually.
+  fake <- make_fake_iarimax()
+  fake$results_df$estimate_x    <- c( 2.0,  0.3, 0.05)
+  fake$results_df[["std.error_x"]] <- c( 0.1,  0.1,  0.1)
+  fake$results_df$n_valid       <- c(25L, 25L, 25L)
+  fake$results_df$n_params      <- c( 2L,  2L,  2L)
+
+  result <- i_pval(fake)
+  pvals  <- result$results_df$pval_x
+
+  expect_equal(pvals[1], 2 * stats::pt(-abs(2.0  / 0.1), df = 23), tolerance = 1e-12)
+  expect_equal(pvals[2], 2 * stats::pt(-abs(0.3  / 0.1), df = 23), tolerance = 1e-12)
+  expect_equal(pvals[3], 2 * stats::pt(-abs(0.05 / 0.1), df = 23), tolerance = 1e-12)
+})
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Layer 2 — LM comparison (integration, skip on CRAN)

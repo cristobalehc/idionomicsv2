@@ -144,10 +144,11 @@ test_that("n_params matches length(model$coef) for each subject", {
 # ── REMA standard errors ──────────────────────────────────────────────────────
 
 test_that("REMA sampling variances equal std.error_x squared", {
-  df <- result$results_df
+  df    <- result$results_df
+  valid <- !is.na(df[["std.error_x"]])  # metafor silently drops NA rows, so lengths must match
   expect_equal(
     as.numeric(result$meta_analysis$vi),
-    df[["std.error_x"]]^2,
+    df[["std.error_x"]][valid]^2,
     tolerance = 1e-8
   )
 })

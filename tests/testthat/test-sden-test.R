@@ -204,11 +204,26 @@ test_that("SDT uses pnull = alpha_arimax / 2", {
   expect_equal(result$sden_parameters$pnull, 0.025)
 })
 
-test_that("alpha_binom overrides default pnull", {
+test_that("alpha_binom overrides default pnull for ENT", {
   fake    <- make_fake_sden_input(rema_pval = 0.40)
   result  <- suppressMessages(sden_test(fake, alpha_arimax = 0.05,
                                         alpha_binom = 0.10))
   expect_equal(result$sden_parameters$pnull, 0.10)
+})
+
+test_that("alpha_binom overrides default pnull for SDT", {
+  fake   <- make_fake_sden_input(rema_beta = 0.5, rema_pval = 0.02)
+  result <- suppressMessages(sden_test(fake, alpha_arimax = 0.05,
+                                       alpha_binom = 0.10))
+  expect_equal(result$sden_parameters$pnull, 0.10)
+})
+
+test_that("SDT with rema_beta == 0 falls back to ENT behavior", {
+  fake   <- make_fake_sden_input(rema_beta = 0, rema_pval = 0.01)
+  result <- suppressMessages(sden_test(fake, test = "SDT"))
+  # Counts all significant effects (ENT behavior), not just one direction
+  expect_equal(result$sden_parameters$test_type, "ENT")
+  expect_equal(result$sden_parameters$sig_effects, result$sden_parameters$all_sig_sum)
 })
 
 # ── Binomial test correctness ─────────────────────────────────────────────────
