@@ -31,8 +31,13 @@ test_that("timevar attribute matches argument", {
 test_that("result has exactly the expected top-level names", {
   expect_setequal(
     names(result),
-    c("results_df", "meta_analysis", "error_arimax_skipped", "models")
+    c("results_df", "meta_analysis", "case_number_detail", "models")
   )
+})
+
+test_that("case_number_detail contains all expected fields", {
+  expected <- c("n_original_df", "n_used_iarimax", "n_filtered_out", "error_arimax_skipped")
+  expect_true(all(expected %in% names(result$case_number_detail)))
 })
 
 test_that("models is NULL when keep_models = FALSE", {
@@ -49,8 +54,8 @@ test_that("models is a named list of Arima objects when keep_models = TRUE", {
   expect_true(all(sapply(valid_models, function(m) "Arima" %in% class(m))))
 })
 
-test_that("error_arimax_skipped is a character vector", {
-  expect_type(result$error_arimax_skipped, "character")
+test_that("error_arimax_skipped is a character vector inside case_number_detail", {
+  expect_type(result$case_number_detail$error_arimax_skipped, "character")
 })
 
 test_that("meta_analysis is a metafor rma object", {

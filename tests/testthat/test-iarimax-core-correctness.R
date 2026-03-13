@@ -97,6 +97,22 @@ test_that("raw_cor (spearman) matches manual cor.test for each subject", {
   }
 })
 
+test_that("raw_cor (kendall) matches manual cor.test for each subject", {
+  result_k <- iarimax(dataframe = panel, y_series = "y", x_series = "x",
+                      id_var = "id", timevar = "time",
+                      correlation_method = "kendall")
+  for (subj in subjects) {
+    expected <- suppressWarnings(
+      stats::cor.test(panel$x[panel$id == subj],
+                      panel$y[panel$id == subj],
+                      method = "kendall")
+    )$estimate[[1]]
+    pkg_row <- result_k$results_df[result_k$results_df$id == subj, ]
+    expect_equal(unname(pkg_row$raw_cor), expected, tolerance = 1e-10,
+                 label = paste("kendall raw_cor for subject", subj))
+  }
+})
+
 # ── n_valid ───────────────────────────────────────────────────────────────────
 
 test_that("n_valid matches stats::nobs of manual model for each subject", {

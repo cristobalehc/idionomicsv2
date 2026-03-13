@@ -117,6 +117,24 @@ test_that("focal_predictor not in x_series triggers error", {
   )
 })
 
+# ── correlation_method validation ────────────────────────────────────────────
+
+test_that("invalid correlation_method triggers upfront error before the loop", {
+  expect_error(
+    iarimax(dataframe = panel, y_series = "y", x_series = "x",
+            id_var = "id", timevar = "time", correlation_method = "blah"),
+    regexp = "Correlation method not supported"
+  )
+})
+
+test_that("invalid correlation_method error names the offending value", {
+  expect_error(
+    iarimax(dataframe = panel, y_series = "y", x_series = "x",
+            id_var = "id", timevar = "time", correlation_method = "blah"),
+    regexp = "blah"
+  )
+})
+
 # ── all subjects filtered before loop ─────────────────────────────────────────
 
 test_that("all subjects below min_n_subject threshold raises an error", {

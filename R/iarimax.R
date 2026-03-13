@@ -30,6 +30,10 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
   # Check wether variables are in the in the dataset.
   required_vars <- c(y_series, x_series, id_var, timevar)
 
+  if (!correlation_method %in% c("pearson","spearman","kendall")) {
+    stop(paste("Correlation method not supported. Check if you spelled the method correctly:", correlation_method))
+  }
+
   if (!all(required_vars %in% colnames(dataframe))) {
     missing_vars <- required_vars[!required_vars %in% colnames(dataframe)]
     stop(paste("Cannot find required variables. Check if you spelled the following variables correctly:", paste(missing_vars, collapse = ", ")))
@@ -57,6 +61,9 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
   if (!focal_predictor %in% x_series) {
     stop(paste("focal_predictor must be one of the x_series variables. Got:", focal_predictor))
   }
+
+  #Extract number of id's.
+  number_of_original_ids <- length(unique(dataframe[[id_var]]))
 
   # Convert strings to rlang::symbols
   y_series_sym <- rlang::sym(y_series)
@@ -119,7 +126,7 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
 
 
   #Start case number counter.
-  casen = 0
+  casen <- 0
   for(i in subjects) {
 
     #Update case number.
@@ -313,13 +320,17 @@ iarimax <- function(dataframe, min_n_subject = 20, minvar = 0.01, y_series, x_se
 
   final_obj <- list(results_df = results_df,
                     meta_analysis = meta_analysis,
-                    error_arimax_skipped = exclude,
+                    case_number_detail = list(n_original_df = number_of_original_ids, #Number of original ids.
+                                                n_filtered_out = number_of_original_ids-length(subjects), #Filtered out by var or n.
+                                                error_arimax_skipped = exclude, #auto.arima failed.
+                                                n_used_iarimax = nrow(results_df)-length(exclude)), #Final number of used cases.
                     models = if (keep_models) arimax_models else NULL)
 
   #Add class to identify the object.
   class(final_obj) <- c("iarimax_results", "list")
 
   #Add attribute to identify focal predictor, and id_var.
+  attr(final_obj, "outcome") <- y_series
   attr(final_obj, "focal_predictor") <- focal_predictor
   attr(final_obj, "id_var") <- id_var
   attr(final_obj, "timevar") <- timevar

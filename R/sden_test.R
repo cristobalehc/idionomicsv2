@@ -195,10 +195,18 @@ sden_test <- function(iarimax_object,alpha_arimax = 0.05, alpha_binom = NULL, te
                       positive_sig_sum = positive_sig_sum, negative_sig_sum = negative_sig_sum, number_of_effects = number_of_effects, test_pval = bintest$p.value,
                       sig_effects = sig_effects)
 
+
   result <- list(sden_parameters = sden_params, binomial_test = bintest)
 
   #Add class for S3 dispatch.
   class(result) <- c("sden_results","list")
+
+  #Inherit attributes to identify focal predictor, and id_var.
+  attr(result, "outcome") <- attr(iarimax_object, "outcome")
+  attr(result, "focal_predictor") <- feature
+  attr(result, "id_var") <- attr(iarimax_object, "id_var")
+  attr(result, "timevar") <- attr(iarimax_object, "timevar")
+
 
   #Return.
   return(invisible(result))
