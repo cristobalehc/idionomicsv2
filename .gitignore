@@ -6,3 +6,4 @@
 .quarto
 *.Rcheck/
 *.tar.gz
+review_notes.md
