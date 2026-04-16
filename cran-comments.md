@@ -13,4 +13,8 @@
 
 ## Comments
 
-Resubmission. Fixed the relative file URI `LICENSE.md` in `README.md` as requested by Dr. Ligges.
+Resubmission. Addressed reviewer feedback from Konstanze Lauseker:
+
+- Removed single quotes around function names in DESCRIPTION (kept only for package/software names)
+- Expanded ARIMAX acronym in DESCRIPTION (AutoRegressive Integrated Moving Average with eXogenous inputs)
+- Added references with DOIs in the DESCRIPTION Description field
